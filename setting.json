@@ -1,0 +1,16 @@
+{
+  "model": {
+    "name": "GIN",
+    "in_channels": 5,
+    "dim": 32,
+    "out_channels": 1
+  },
+  "dataset": {
+    "data_path": "./nasbench_dataset.pt",
+    "num_data": 10000,
+    "num_train": 80,
+    "num_val": 20
+  },
+  "lr": 1e-3,
+  "epoch": 1000
+}
