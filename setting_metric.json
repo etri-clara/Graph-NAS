@@ -1,11 +1,11 @@
 {
   "encoder": {
-    "type": "regression",
+    "type": "metric",
     "spec": {
       "name": "GIN",
       "in_channels": 5,
       "dim": 32,
-      "out_channels": 8
+      "out_channels": 1
     },
     "training": {
       "lr": 1e-3,
@@ -30,8 +30,8 @@
     }
   },
   "dataset": {
-    "data_path": "./nasbench_dataset_108_all.pt",
-    "n_target": 8,
+    "data_path": "./nasbench_dataset.pt",
+    "n_target": 1,
     "num_data": 10000,
     "num_train": 80,
     "num_val": 20

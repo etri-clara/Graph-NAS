@@ -195,3 +195,11 @@ class GIN(torch.nn.Module):
         out = self.lin2(out)
 
         return out
+
+class GNNMetric:
+    def __init__(self, args):
+        # 임베딩을 내뱉는 GNN
+        raise NotImplementedError("구현하세요")
+
+    def forward(self, x, edge_index, batch=None, embedding=False):
+        raise NotImplementedError("구현하세요")

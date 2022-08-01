@@ -1,5 +1,6 @@
 {
   "encoder": {
+    "type": "regression",
     "spec": {
       "name": "GIN",
       "in_channels": 5,

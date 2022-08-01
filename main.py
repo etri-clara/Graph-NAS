@@ -9,10 +9,10 @@ from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader
 
 from construction import kNNConstruction
-from modules import GCN, GAT, GIN, GCNRegressor, GINRegressor
-from utils import Option, dataset, seed_everything, gnn_train, gnn_eval, gog_eval
+from modules import GCN, GAT, GIN, GCNRegressor, GINRegressor, GNNMetric
+from utils import Option, dataset, dataset_metric, seed_everything, gnn_train, gnn_eval, gog_eval
 
-model_map = {"GCN": GCN, "GAT": GAT, "GIN": GIN}
+model_map = {"GCN": GCN, "GAT": GAT, "GIN": GIN, "GNN_metric": GNNMetric}
 regressor_map = {"GCN": GCNRegressor, "GIN": GINRegressor}
 
 
@@ -21,10 +21,16 @@ class GNNPredictor:
         self.params = configs
         self.data = data
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.train_loader, self.val_loader, self.test_loader = dataset(data,
-                                                                       self.params.dataset.num_data,
-                                                                       self.params.dataset.num_train,
-                                                                       self.params.dataset.num_val)
+        if self.params.encoder.type == "metric":
+            self.train_loader, self.val_loader, self.test_loader = dataset_metric(data,
+                                                                                  self.params.dataset.num_data,
+                                                                                  self.params.dataset.num_train,
+                                                                                  self.params.dataset.num_val)
+        else:
+            self.train_loader, self.val_loader, self.test_loader = dataset(data,
+                                                                           self.params.dataset.num_data,
+                                                                           self.params.dataset.num_train,
+                                                                           self.params.dataset.num_val)
 
         self.encoder = model_map[self.params.encoder.spec.name](self.params.encoder.spec).to(self.device)
         self.regressor = regressor_map[self.params.gog.regressor.spec.name](
@@ -35,6 +41,12 @@ class GNNPredictor:
                                                                        self.params.dataset.num_data,
                                                                        self.params.dataset.num_train,
                                                                        self.params.dataset.num_val)
+
+    def encode_metric_learing(self):
+        # metric learning 학습시키기
+        # 여기서, metric learning 모델을 학습시킨 뒤에, 그 모델에서 얻은 임베딩 뒤에 MLP를 붙여서 regression을 한 후에,
+        # test mse, test mae까지 리턴 해야 포맷이 맞음
+        raise NotImplementedError("구현하세요 현주씨~")
 
     def encode(self):
         best_val_mse = math.inf
@@ -109,7 +121,7 @@ if __name__ == "__main__":
 
     results = {'test mse': [], 'test mae': [], 'knn test mse': [], 'knn test mae': [],
                'knn test r2': [], 'kendall tau': [], 'spearmanr coeff': []}
-    
+
     print("----------------Start load data----------------")
     nas_data = torch.load(config.dataset.data_path)
     print("----------------Done!----------------")
@@ -119,12 +131,15 @@ if __name__ == "__main__":
         # print("----------------Run {}----------------".format(i + 1))
         random.shuffle(nas_data)
         tester = GNNPredictor(config, nas_data)
-        
+
         # stage 1
-        test_mse, test_mae = tester.encode()
+        if config.encoder.type == "metric":
+            test_mse, test_mae = tester.encode_metric_learing()
+        else:
+            test_mse, test_mae = tester.encode()
         results['test mse'].append(test_mse)
         results['test mae'].append(test_mae)
-        
+
         # stage 2
         tester.gog_construction()
         metrics = tester.gog_regression()

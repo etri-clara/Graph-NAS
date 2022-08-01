@@ -63,6 +63,11 @@ def dataset(data, num_data, num_train, num_val):
     return train_dataloader, val_dataloader, test_dataloader
 
 
+def dataset_metric(data, num_data, num_train, num_val):
+    # metric learning에 적합한 dataloader
+    raise NotImplementedError("여기도 구현하세요~")
+
+
 def seed_everything(seed: int = 29):
     random.seed(seed)
     np.random.seed(seed)
