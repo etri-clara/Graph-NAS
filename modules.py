@@ -4,8 +4,63 @@ import torch
 import torch.nn.functional as F
 from torch.nn.parameter import Parameter
 from torch_geometric.utils import to_dense_adj
+from torch.nn import Linear, Sequential, BatchNorm1d, ReLU
 from torch_geometric.nn import GINConv, global_add_pool, GATConv, GCNConv
-from torch.nn import Linear, LayerNorm, Dropout, Sequential, BatchNorm1d, ReLU
+
+
+class GCNRegressor(torch.nn.Module):  # HJ
+    def __init__(self, n_feat, n_hidden):
+        super().__init__()
+        self.conv1 = GCNConv(n_feat, n_hidden)
+        self.conv2 = GCNConv(n_hidden, 1)
+
+    def forward(self, data):
+        x, edge_index = data.x, data.edge_index
+
+        x = self.conv1(x, edge_index)
+        x = F.relu(x)
+        x = F.dropout(x, training=self.training)
+        x = self.conv2(x, edge_index)
+
+        return x
+
+
+class GINRegressor(torch.nn.Module):
+    def __init__(self, n_feat, n_hidden):
+        super().__init__()
+
+        self.conv1 = GINConv(
+            Sequential(Linear(n_feat, n_hidden), BatchNorm1d(n_hidden), ReLU(),
+                       Linear(n_hidden, n_hidden), ReLU()))
+
+        self.conv2 = GINConv(
+            Sequential(Linear(n_hidden, n_hidden), BatchNorm1d(n_hidden), ReLU(),
+                       Linear(n_hidden, n_hidden), ReLU()))
+
+        self.conv3 = GINConv(
+            Sequential(Linear(n_hidden, n_hidden), BatchNorm1d(n_hidden), ReLU(),
+                       Linear(n_hidden, n_hidden), ReLU()))
+
+        self.conv4 = GINConv(
+            Sequential(Linear(n_hidden, n_hidden), BatchNorm1d(n_hidden), ReLU(),
+                       Linear(n_hidden, n_hidden), ReLU()))
+
+        self.conv5 = GINConv(
+            Sequential(Linear(n_hidden, n_hidden), BatchNorm1d(n_hidden), ReLU(),
+                       Linear(n_hidden, 1), ReLU()))
+
+    def forward(self, data):
+        x, edge_index = data.x, data.edge_index
+
+        x = self.conv1(x, edge_index)
+        x = self.conv2(x, edge_index)
+        x = self.conv3(x, edge_index)
+        x = self.conv4(x, edge_index)
+        x = self.conv5(x, edge_index)
+        # x = global_add_pool(x, None)
+
+        return x
+
 
 class GraphConvolution(torch.nn.Module):
     """
@@ -43,18 +98,15 @@ class GraphConvolution(torch.nn.Module):
                + str(self.in_features) + ' -> ' \
                + str(self.out_features) + ')'
 
+
 class GCN(torch.nn.Module):
     def __init__(self, args):
         super(GCN, self).__init__()
         self.size = args.dim
         self.gc1 = GraphConvolution(args.in_channels, self.size)
         self.gc2 = GraphConvolution(self.size, self.size)
-        self.gc3 = GraphConvolution(self.size, self.size)
-        self.gc4 = GraphConvolution(self.size, self.size)
         self.bn1 = torch.nn.BatchNorm1d(self.size)
         self.bn2 = torch.nn.BatchNorm1d(self.size)
-        self.bn3 = torch.nn.BatchNorm1d(self.size)
-        self.bn4 = torch.nn.BatchNorm1d(self.size)
         self.sigmoid = torch.nn.Sigmoid()
         self.fc = torch.nn.Linear(self.size, args.out_channels)
         self.init_weights()
@@ -65,24 +117,19 @@ class GCN(torch.nn.Module):
         torch.nn.init.uniform_(self.gc3.weight, a=-0.05, b=0.05)
         torch.nn.init.uniform_(self.gc4.weight, a=-0.05, b=0.05)
 
-    def forward(self, x, edge_index, batch=None, extract_embedding=False):
+    def forward(self, x, edge_index, batch=None, embedding=False):
         adj = to_dense_adj(edge_index)
         x = x.float()
         x = F.relu(self.bn1(self.gc1(x, adj).transpose(2, 1)))
         x = x.transpose(1, 2)
         x = F.relu(self.bn2(self.gc2(x, adj).transpose(2, 1)))
         x = x.transpose(1, 2)
-        x = F.relu(self.bn3(self.gc3(x, adj).transpose(2, 1)))
-        x = x.transpose(1, 2)
-        x = F.relu(self.bn4(self.gc4(x, adj).transpose(2, 1)))
-        x = x.transpose(1, 2)
         x = x.reshape(-1, self.size)
         x = global_add_pool(x, batch)
-        out = self.fc(x)
-        if extract_embedding:
+
+        if embedding:
             return x
-        else:
-            return out
+        return self.fc(x)
 
 
 class GAT(torch.nn.Module):
@@ -96,18 +143,23 @@ class GAT(torch.nn.Module):
         self.lin1 = Linear(args.dim, args.dim)
         self.lin2 = Linear(args.dim, args.out_channels)
 
-    def forward(self, x, edge_index, batch=None):
+    def forward(self, x, edge_index, batch=None, embedding=False):
         x = x.float()
         x = F.dropout(x, p=0.6, training=self.training)
         x = F.elu(self.conv1(x, edge_index))
         x = F.dropout(x, p=0.6, training=self.training)
         x = self.conv2(x, edge_index)
         x = global_add_pool(x, batch)
-        x = self.lin1(x).relu()
-        x = F.dropout(x, p=0.5, training=self.training)
-        x = self.lin2(x)
 
-        return x
+        if embedding:
+            return x
+
+        out = self.lin1(x).relu()
+        out = F.dropout(out, p=0.5, training=self.training)
+        out = self.lin2(out)
+
+        return out
+
 
 class GIN(torch.nn.Module):
     def __init__(self, args):
@@ -129,12 +181,17 @@ class GIN(torch.nn.Module):
         self.lin1 = Linear(dim, dim)
         self.lin2 = Linear(dim, out_channels)
 
-    def forward(self, x, edge_index, batch=None):
+    def forward(self, x, edge_index, batch=None, embedding=False):
         x = x.float()
         x = self.conv1(x, edge_index)
         x = self.conv2(x, edge_index)
         x = global_add_pool(x, batch)
-        x = self.lin1(x).relu()
-        x = F.dropout(x, p=0.5, training=self.training)
-        x = self.lin2(x)
-        return x
+
+        if embedding:
+            return x
+
+        out = self.lin1(x).relu()
+        out = F.dropout(out, p=0.5, training=self.training)
+        out = self.lin2(out)
+
+        return out
