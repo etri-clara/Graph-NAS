@@ -20,8 +20,8 @@
     },
     "regressor": {
       "spec": {
-        "name": "SAGE",
-        "base": "SAGE",
+        "name": "GIN",
+        "base": "GIN",
         "hidden_dim": 8
       },
       "training": {
