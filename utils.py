@@ -17,7 +17,8 @@ from scipy.stats import kendalltau, spearmanr, rankdata
 from torch_geometric.loader import DataLoader as GDataLoader
 from torch_geometric.utils import to_dense_adj
 from tqdm import tqdm, trange
-            
+
+
 class Option(dict):
     def __init__(self, *args, **kwargs):
         args = [arg if isinstance(arg, dict) else json.loads(open(arg).read())
@@ -86,22 +87,24 @@ def setdiff(n, idx):
 
 def loss_fcn(output, labels, idx, S, coeffs, device, add_logdet):
     rL = labels - output
-    rL=rL.float()
+    rL = rL.float()
     S = S.to_dense()
     Gamma = (torch.eye(S.size(0)).to(device) - torch.tanh(coeffs[0]) * S.to(device)) * torch.exp(coeffs[1])
     cp_idx = setdiff(len(S), idx)
-    #torch.matmul(Gamma[idx, :][:, idx], rL)
-    #solve(Gamma[cp_idx, :][:, cp_idx], torch.matmul(Gamma[cp_idx, :][:, idx], rL))
-    #torch.matmul(Gamma[idx, :][:, cp_idx], solve(Gamma[cp_idx, :][:, cp_idx], torch.matmul(Gamma[cp_idx, :][:, idx], rL)))
-    
+    # torch.matmul(Gamma[idx, :][:, idx], rL)
+    # solve(Gamma[cp_idx, :][:, cp_idx], torch.matmul(Gamma[cp_idx, :][:, idx], rL))
+    # torch.matmul(Gamma[idx, :][:, cp_idx], solve(Gamma[cp_idx, :][:, cp_idx], torch.matmul(Gamma[cp_idx, :][:, idx], rL)))
+
     loss1 = rL.dot(torch.matmul(Gamma[idx, :][:, idx], rL) - torch.matmul(Gamma[idx, :][:, cp_idx],
-                                                              solve(Gamma[cp_idx, :][:, cp_idx],
-                                                                    torch.matmul(Gamma[cp_idx, :][:, idx], rL))))  # HJ
+                                                                          solve(Gamma[cp_idx, :][:, cp_idx],
+                                                                                torch.matmul(Gamma[cp_idx, :][:, idx],
+                                                                                             rL))))  # HJ
     loss2 = 0.
     if add_logdet: loss2 = logdet(Gamma) - logdet(Gamma[cp_idx, :][:, cp_idx])
     l = loss1 - loss2
-    
+
     return l / len(idx)
+
 
 """
 class NeighborSampler(object):
@@ -124,47 +127,49 @@ class NeighborSampler(object):
         return blocks
 """
 
+
 def dataset(data, num_data, num_train, num_val):
     selected_data = data[:num_data]
 
     train_data = selected_data[:num_train]
     val_data = selected_data[num_train:num_train + num_val]
     test_data = selected_data[num_train + num_val:]
-    
+
     train_dataloader = GDataLoader(train_data, shuffle=True, batch_size=16)
     val_dataloader = GDataLoader(val_data, shuffle=False, batch_size=16)
     test_dataloader = GDataLoader(test_data, shuffle=False, batch_size=16)
 
     return train_dataloader, val_dataloader, test_dataloader
 
-def dataset_top_k(data, train_mask, val_mask, test_mask):
 
+def dataset_top_k(data, train_mask, val_mask, test_mask):
     train_data = [data[i] for i in train_mask]
     val_data = [data[i] for i in val_mask]
     test_data = [data[i] for i in test_mask]
-    
+
     train_dataloader = GDataLoader(train_data, shuffle=True, batch_size=16)
     val_dataloader = GDataLoader(val_data, shuffle=False, batch_size=16)
     test_dataloader = GDataLoader(test_data, shuffle=False, batch_size=16)
 
     return train_dataloader, val_dataloader, test_dataloader
 
+
 def dataset2(data, num_data, num_train, num_val):
+    dataloader = GDataLoader(data, shuffle=False, batch_size=num_data + 1)
 
-
-    dataloader = GDataLoader(data, shuffle=False, batch_size=num_data+1)
-    
     for datas in dataloader:
         one_loader = datas
-        temp=datas.batch.tolist()
-    
+        temp = datas.batch.tolist()
+
     train_mask, val_mask, test_mask = [], [], []
-    
+
     for idx, item in enumerate(temp):
-        if temp[idx] < num_train: train_mask.append(idx)
-        elif temp[idx]<num_val: val_mask.append(idx)
-        else: test_mask.append(idx)
-    
+        if temp[idx] < num_train:
+            train_mask.append(idx)
+        elif temp[idx] < num_val:
+            val_mask.append(idx)
+        else:
+            test_mask.append(idx)
 
     return one_loader, torch.tensor(train_mask), torch.tensor(val_mask), torch.tensor(test_mask)
 
@@ -229,19 +234,19 @@ def seed_everything(seed: int = 29):
     np.random.seed(seed)
     os.environ["PYTHONHASHSEED"] = str(seed)
     torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)  # type: ignore
-    torch.backends.cudnn.deterministic = True  # type: ignore
-    torch.backends.cudnn.benchmark = True  # type: ignore
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = True
 
 
 def gnn_train(model, loader, optimizer, device, baseline=False):
     model.train()
     total_loss = 0
-    if baseline==False:
+    if baseline == False:
         for data in loader:
             data = data.to(device)
             optimizer.zero_grad()
-            
+
             output = model(data.x, data.edge_index, data.batch, embedding=False)
             loss = F.mse_loss(output, data.y.float().reshape(output.shape[0], -1))
             loss.backward()
@@ -253,23 +258,24 @@ def gnn_train(model, loader, optimizer, device, baseline=False):
             optimizer.zero_grad()
             output = model(data.x, data.edge_index, data.batch, embedding=False).sigmoid()
             loss = F.mse_loss(output, data.y.float().reshape(output.shape[0], -1))
-       
+
             loss.backward()
             optimizer.step()
             total_loss += float(loss) * len(data)
 
     return total_loss / len(loader)
+
 
 def gnn_train_log(model, loader, optimizer, device, baseline=False):
     model.train()
     total_loss = 0
-    if baseline==False:
+    if baseline == False:
         for data in loader:
             data = data.to(device)
             optimizer.zero_grad()
-            
+
             output = model(data.x, data.edge_index, data.batch, embedding=False)
-            loss = F.mse_loss(torch.exp(output-1), torch.exp(data.y.float().reshape(output.shape[0], -1)-1))
+            loss = F.mse_loss(torch.exp(output - 1), torch.exp(data.y.float().reshape(output.shape[0], -1) - 1))
             loss.backward()
             optimizer.step()
             total_loss += float(loss) * len(data)
@@ -279,13 +285,12 @@ def gnn_train_log(model, loader, optimizer, device, baseline=False):
             optimizer.zero_grad()
             output = model(data.x, data.edge_index, data.batch, embedding=False).sigmoid()
             loss = F.mse_loss(output, data.y.float().reshape(output.shape[0], -1))
-       
+
             loss.backward()
             optimizer.step()
             total_loss += float(loss) * len(data)
 
     return total_loss / len(loader)
-
 
 
 @torch.no_grad()
@@ -293,40 +298,36 @@ def gnn_eval(model, loader, device):
     model.eval()
     total_mse = 0
     total_mae = 0
-    
-    
+
     for data in loader:
         data = data.to(device)
         output = model(data.x, data.edge_index, data.batch, embedding=False)
         mse = F.mse_loss(output, data.y.float().reshape(output.shape[0], -1))
         mae = F.l1_loss(output, data.y.float().reshape(output.shape[0], -1))
 
-        
         total_mse += float(mse) * len(data)
         total_mae += float(mae) * len(data)
 
     return total_mse / len(loader), total_mae / len(loader)
 
+
 @torch.no_grad()
 def gnn_eval_baseline(model, loader, device, default=1):
     model.eval()
-    pred, true=[], []
+    pred, true = [], []
     for data in loader:
         data = data.to(device)
-        out = model(data.x, data.edge_index, data.batch, embedding=False).sigmoid()    
+        out = model(data.x, data.edge_index, data.batch, embedding=False).sigmoid()
         pred.extend(torch.transpose(out, 0, 1)[-1].tolist())
         temp = torch.reshape(data.y, [out.shape[0], out.shape[1]])
         true.extend(torch.transpose(temp, 0, 1)[-1].tolist())
 
-    tot = len(true)
-    pred_acc=np.array(pred)
-    true_acc=np.array(true)
-    
-    
-    #print(pred_acc, true_acc)
-    if default==0:
+    pred_acc = np.array(pred)
+    true_acc = np.array(true)
+
+    if default == 0:
         return np.square(np.subtract(pred_acc, true_acc)).mean(), np.abs(np.subtract(pred_acc, true_acc)).mean()
-    
+
     loss = np.square(np.subtract(pred_acc, true_acc)).mean()
     mae_loss = np.abs(np.subtract(pred_acc, true_acc)).mean()
     r2 = r2_score(pred_acc, true_acc)
@@ -335,12 +336,10 @@ def gnn_eval_baseline(model, loader, device, default=1):
     true_rank = rankdata(true_acc)
     tau, p1 = kendalltau(pred_rank, true_rank)
     coeff, p2 = spearmanr(pred_rank, true_rank)
-    
+
     top_arc_pred = np.argsort(pred_acc)[::-1]
     top_arc_true = np.argsort(true_acc)[::-1]
-           
-    #print(top_arc_pred[:10], top_arc_true[:10])
-    #print(true_acc[top_arc_pred[:10]], true_acc[top_arc_true[:10]])
+
     precision_at_1 = precision(top_arc_true[:1], top_arc_pred[:1], 1)
     precision_at_10 = precision(top_arc_true[:10], top_arc_pred[:10], 10)
     precision_at_50 = precision(top_arc_true[:50], top_arc_pred[:50], 50)
@@ -351,40 +350,38 @@ def gnn_eval_baseline(model, loader, device, default=1):
               'p@100': precision_at_100, 'top acc': true_acc[top_arc_pred[0]]}
     return metric
 
+
 @torch.no_grad()
 def gnn_eval_baseline_log(model, loader, device, default=1):
     model.eval()
-    pred, true=[], []
+    pred, true = [], []
     for data in loader:
         data = data.to(device)
-        out = model(data.x, data.edge_index, data.batch, embedding=False).sigmoid()    
+        out = model(data.x, data.edge_index, data.batch, embedding=False).sigmoid()
         pred.extend(torch.transpose(out, 0, 1)[-1].tolist())
         temp = torch.reshape(data.y, [out.shape[0], out.shape[1]])
         true.extend(torch.transpose(temp, 0, 1)[-1].tolist())
 
     tot = len(true)
-    pred_acc=np.array(pred)
-    true_acc=np.array(true)
-    
-    
-    #print(pred_acc, true_acc)
-    if default==0:
+    pred_acc = np.array(pred)
+    true_acc = np.array(true)
+
+    # print(pred_acc, true_acc)
+    if default == 0:
         return np.square(np.subtract(pred_acc, true_acc)).mean(), np.abs(np.subtract(pred_acc, true_acc)).mean()
-    
-    loss = np.square(np.subtract(np.exp(pred_acc-1), np.exp(true_acc-1))).mean()
-    mae_loss = np.abs(np.subtract(np.exp(pred_acc-1), np.exp(true_acc-1))).mean()
+
+    loss = np.square(np.subtract(np.exp(pred_acc - 1), np.exp(true_acc - 1))).mean()
+    mae_loss = np.abs(np.subtract(np.exp(pred_acc - 1), np.exp(true_acc - 1))).mean()
     r2 = r2_score(pred_acc, true_acc)
 
     pred_rank = rankdata(pred_acc)
     true_rank = rankdata(true_acc)
     tau, p1 = kendalltau(pred_rank, true_rank)
     coeff, p2 = spearmanr(pred_rank, true_rank)
-    
+
     top_arc_pred = np.argsort(pred_acc)[::-1]
     top_arc_true = np.argsort(true_acc)[::-1]
-           
-    #print(top_arc_pred[:10], top_arc_true[:10])
-    #print(true_acc[top_arc_pred[:10]], true_acc[top_arc_true[:10]])
+
     precision_at_1 = precision(top_arc_true[:1], top_arc_pred[:1], 1)
     precision_at_10 = precision(top_arc_true[:10], top_arc_pred[:10], 10)
     precision_at_50 = precision(top_arc_true[:50], top_arc_pred[:50], 50)
@@ -394,6 +391,7 @@ def gnn_eval_baseline_log(model, loader, device, default=1):
               'p@10': precision_at_10, 'p@50': precision_at_50,
               'p@100': precision_at_100, 'top acc': true_acc[top_arc_pred[0]]}
     return metric
+
 
 def train_gog_regressor(model, optimizer, num_epoch, G):
     best_val_mae = math.inf
@@ -419,16 +417,17 @@ def train_gog_regressor_log(model, optimizer, num_epoch, G):
     for epoch in trange(num_epoch):
         optimizer.zero_grad()
         out = model(G)
-        loss = F.mse_loss(torch.exp(out[G.train_mask]-1), torch.exp(G.y[G.train_mask].reshape(-1, 1)-1))
+        loss = F.mse_loss(torch.exp(out[G.train_mask] - 1), torch.exp(G.y[G.train_mask].reshape(-1, 1) - 1))
 
         loss.backward()
         optimizer.step()
         with torch.no_grad():
-            val_mae = F.l1_loss(torch.exp(out[G.val_mask]-1), torch.exp(G.y[G.val_mask]-1).reshape(-1, 1))
+            val_mae = F.l1_loss(torch.exp(out[G.val_mask] - 1), torch.exp(G.y[G.val_mask] - 1).reshape(-1, 1))
             if val_mae < best_val_mae:
                 best_val_mae = float(val_mae)
                 best_val_model = model.state_dict()
     return best_val_model
+
 
 def train_gog_regressor_top_k(model, optimizer, num_epoch, G):
     best_val_mae = math.inf
@@ -436,7 +435,7 @@ def train_gog_regressor_top_k(model, optimizer, num_epoch, G):
     num = 5
     masks = G.train_mask.tolist() + G.val_mask.tolist()
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    
+
     for i in range(num):
         for epoch in trange(num_epoch):
             optimizer.zero_grad()
@@ -449,53 +448,43 @@ def train_gog_regressor_top_k(model, optimizer, num_epoch, G):
                 if val_mae < best_val_mae:
                     best_val_mae = float(val_mae)
                     best_val_model = model.state_dict()
-            
-        if i!=num-1:
+
+        if i != num - 1:
             tot = len(list(out))
             pred_acc = np.array([out[i].item() for i in range(tot)])
             top_acc_pred = np.argsort(pred_acc)[::-1]
             cand = []
             idx = 0
-            
+
             while True:
                 if len(cand) == 10: break
                 ele = top_acc_pred[idx]
                 if ele not in masks:
                     cand.append(ele)
                     masks = cand + [ele]
-                    G.train_mask = torch.cat((G.train_mask, torch.tensor([ele]).to(device)), dim = 0)
-                    G.test_mask = G.test_mask[G.test_mask != ele]          
-                idx +=1
-            
+                    G.train_mask = torch.cat((G.train_mask, torch.tensor([ele]).to(device)), dim=0)
+                    G.test_mask = G.test_mask[G.test_mask != ele]
+                idx += 1
+
     return best_val_model, G
 
 
 def cgnn_total(model, G, optimizer, device, num_data, params, epochs):
-    #g = dgl.graph(
-    #    (G.edge_index[0].clone().detach(), G.edge_index[1].clone().detach()))
-    #g.ndata['features'] = G.x.clone().detach().requires_grad_(True)
-    #prepare_mp(g)
     l = [int(i / 2) for i in range(2 * num_data)]
-    #g.add_edges(l, l)
 
-    #sampler = NeighborSampler(g, [25, 25])
-    #last_loader = DataLoader(dataset=G.train_mask.cpu().numpy(), batch_size=16, collate_fn=sampler.sample_blocks,
-    #                          drop_last=False, num_workers=0)
+    G.edge_index = torch.cat([torch.tensor([l, l]).to(device), G.edge_index], dim=1)
 
-    #G.addedge
-    G.edge_index=torch.cat([torch.tensor([l,l]).to(device), G.edge_index], dim=1)
-    
     coeffs = Variable(torch.tensor([1., 3.]).to(device), requires_grad=True)
     coeffs_optimizer = torch.optim.SGD([coeffs], lr=1e-1, momentum=0.0)
 
     # initialize
-    adj=to_dense_adj(G.edge_index.cpu())[0]
-    
+    adj = to_dense_adj(G.edge_index.cpu())[0]
+
     sp_adj = sp.coo_matrix(adj)
     S = sparse_mx_to_torch_sparse_tensor(normalize(sp_adj.astype(float)))
 
     name = params.gog.regressor.spec.base
-      
+
     for epoch in trange(epochs):
 
         # Loop over the dataloader to sample the computation dependency graph as a list of
@@ -522,8 +511,9 @@ def cgnn_total(model, G, optimizer, device, num_data, params, epochs):
             # print("Epoch: ", epoch, " loss: ", loss)
 
         metric = gog_eval(model, G)
-        
+
     return metric
+
 
 def triplet_train(model, loader, optimizer, device):
     model.train()
@@ -571,6 +561,7 @@ def triplet_eval(model, loader, device):
 
     return total_loss / len(loader)
 
+
 @torch.no_grad()
 def gog_eval(model, graph, plot=0):
     out = model(graph)
@@ -586,13 +577,10 @@ def gog_eval(model, graph, plot=0):
     true_rank = rankdata(true_acc)
     tau, p1 = kendalltau(pred_rank, true_rank)
     coeff, p2 = spearmanr(pred_rank, true_rank)
-    
+
     top_arc_pred = np.argsort(pred_acc)[::-1]
     top_arc_true = np.argsort(true_acc)[::-1]
-    
-    
-    #print(top_arc_pred[:10], top_arc_true[:10])
-    #print(true_acc[top_arc_pred[:10]], true_acc[top_arc_true[:10]])
+
     precision_at_1 = precision(top_arc_true[:1], top_arc_pred[:1], 1)
     precision_at_10 = precision(top_arc_true[:10], top_arc_pred[:10], 10)
     precision_at_50 = precision(top_arc_true[:50], top_arc_pred[:50], 50)
@@ -611,8 +599,10 @@ def gog_eval(model, graph, plot=0):
 @torch.no_grad()
 def gog_eval_log(model, graph, plot=0):
     out = model(graph)
-    loss = F.mse_loss(torch.exp(out[graph.test_mask]-1), torch.exp(graph.y[graph.test_mask].reshape(-1, 1)-1)).item()
-    mae_loss = F.l1_loss(torch.exp(out[graph.test_mask]-1), torch.exp(graph.y[graph.test_mask].reshape(-1, 1)-1)).item()
+    loss = F.mse_loss(torch.exp(out[graph.test_mask] - 1),
+                      torch.exp(graph.y[graph.test_mask].reshape(-1, 1) - 1)).item()
+    mae_loss = F.l1_loss(torch.exp(out[graph.test_mask] - 1),
+                         torch.exp(graph.y[graph.test_mask].reshape(-1, 1) - 1)).item()
     r2 = r2_score(graph.y[graph.test_mask].reshape(-1, 1).tolist(), out[graph.test_mask].tolist())
 
     tot = len(list(out))
@@ -623,13 +613,10 @@ def gog_eval_log(model, graph, plot=0):
     true_rank = rankdata(true_acc)
     tau, p1 = kendalltau(pred_rank, true_rank)
     coeff, p2 = spearmanr(pred_rank, true_rank)
-    
+
     top_arc_pred = np.argsort(pred_acc)[::-1]
     top_arc_true = np.argsort(true_acc)[::-1]
-    
-    
-    #print(top_arc_pred[:10], top_arc_true[:10])
-    #print(true_acc[top_arc_pred[:10]], true_acc[top_arc_true[:10]])
+
     precision_at_1 = precision(top_arc_true[:1], top_arc_pred[:1], 1)
     precision_at_10 = precision(top_arc_true[:10], top_arc_pred[:10], 10)
     precision_at_50 = precision(top_arc_true[:50], top_arc_pred[:50], 50)
@@ -644,6 +631,7 @@ def gog_eval_log(model, graph, plot=0):
 
     return metric
 
+
 def sparse_mx_to_torch_sparse_tensor(sparse_mx):
     """Convert a scipy sparse matrix to a torch sparse tensor."""
     sparse_mx = sparse_mx.tocoo().astype(np.float32)
@@ -656,6 +644,7 @@ def sparse_mx_to_torch_sparse_tensor(sparse_mx):
 
 def get_Gamma(alpha, beta, S):
     return beta * torch.eye(S.size(0)) - beta * alpha * S
+
 
 def normalize(mx):
     """Row-normalize sparse matrix"""
@@ -674,16 +663,15 @@ def precision(actual, predicted, k):
     return result
 
 
-
 #####
 
 def sparse_matrix_to_torch(X):
     coo = X.tocoo()
     indices = np.array([coo.row, coo.col])
     return torch.sparse.FloatTensor(
-            torch.LongTensor(indices),
-            torch.FloatTensor(coo.data),
-            coo.shape)
+        torch.LongTensor(indices),
+        torch.FloatTensor(coo.data),
+        coo.shape)
 
 
 def matrix_to_torch(X):
@@ -691,11 +679,11 @@ def matrix_to_torch(X):
         return sparse_matrix_to_torch(X)
     else:
         return torch.FloatTensor(X)
-    
-    
+
+
 def calc_A_hat(adj_matrix: sp.spmatrix) -> sp.spmatrix:
     nnodes = adj_matrix.shape[0]
-    
+
     A = adj_matrix + sp.eye(nnodes)
     D_vec = np.sum(A, axis=1).A1
     D_vec_invsqrt_corr = 1 / np.sqrt(D_vec)
@@ -708,4 +696,3 @@ def calc_ppr_exact(adj_matrix: sp.spmatrix, alpha: float) -> np.ndarray:
     M = calc_A_hat(adj_matrix)
     A_inner = sp.eye(nnodes) - (1 - alpha) * M
     return alpha * np.linalg.inv(A_inner.toarray())
-
