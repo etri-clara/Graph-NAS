@@ -7,18 +7,15 @@ from torch_cluster import knn_graph
 kernel_map = {"shortest": ShortestPath}
 
 
-def kNNConstruction(data, node, method, k=10):
+def kNNConstruction(data, node, method="euclidean", k=10):
     tot = len(node)
     batch = torch.tensor([0] * tot)
-    # node=torch.tensor([[1.0]*32 for i in range(sample)])
-
-    if method == "euclidean":
-        edge_index = knn_graph(node, k=k, batch=batch, loop=False)
-    elif method == "cosine":
+    if method == "cosine":
         edge_index = knn_graph(node, k=k, batch=batch, loop=False, cosine=True)
     elif method == "shortest":
         edge_index = kernel_kNN(tot, data, method, k)
-
+    else: # if euclidean
+        edge_index = knn_graph(node, k=k, batch=batch, loop=False)
     return edge_index
 
 
