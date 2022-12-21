@@ -65,7 +65,7 @@ class GINRegressor(torch.nn.Module):
         self.n_hidden = n_hidden
 
     def forward(self, data):
-        x, edge_index, y = data.x[:, :self.n_hidden], data.edge_index, data.x[:, self.n_hidden:]
+        x, edge_index = data.x, data.edge_index
         x = self.conv1(x, edge_index)
         x = self.conv2(x, edge_index)
         x = self.lin1(x).relu()
@@ -218,8 +218,6 @@ class GNNMetric:
     def forward(self, x, edge_index, batch=None, embedding=False):
         raise NotImplementedError("TODO")
 
-
-##############PPNP##############
 
 class SparseDropout(torch.nn.Module):
     def __init__(self, p):
