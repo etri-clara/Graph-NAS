@@ -11,7 +11,7 @@ from torch_sparse import spmm
 from utils import *
 
 
-class GCNRegressor(torch.nn.Module):  # HJ
+class GCNRegressor(torch.nn.Module):
     def __init__(self, n_feat, n_hidden):
         super().__init__()
         self.conv1 = GCNConv(n_feat, n_hidden)

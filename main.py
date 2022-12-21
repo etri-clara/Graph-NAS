@@ -81,7 +81,7 @@ class GNNPredictor:
                     loss = loss_fcn(out.squeeze(), data.y.squeeze(), mask, S[idx], coeffs, self.device, False)
 
                     optimizer.zero_grad()
-                    loss.backward()  # problem
+                    loss.backward()
                     optimizer.step()
 
                     if epoch % 10 == 0:
