@@ -1,19 +1,13 @@
 import torch
-import networkx as nx
-
+from grakel import Graph
+from grakel.kernels import ShortestPath
 from torch_cluster import knn_graph
-from grakel.datasets import fetch_dataset
-from grakel.kernels import ShortestPath, RandomWalk
-from grakel import graph_from_networkx, Graph
 
 # construct kNN graph
 kernel_map = {"shortest": ShortestPath}
 
 
 def kNNConstruction(data, node, method, k=10):
-    
-
-    
     tot = len(node)
     batch = torch.tensor([0] * tot)
     # node=torch.tensor([[1.0]*32 for i in range(sample)])
@@ -51,7 +45,6 @@ def kernel_kNN(sample, data, kernel="shortest path", k=10):
         G.append(Graph(edges, node_labels=node_labels))
 
     gk = kernel_map[kernel]()
-    # gk= RandomWalk()
     kernel_simi = torch.tensor(gk.fit_transform(G))
     kernel_idx = torch.topk(kernel_simi, k=k, dim=1, largest=True)[1][:, 1:].numpy()
 
