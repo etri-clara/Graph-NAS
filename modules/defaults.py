@@ -34,56 +34,6 @@ class GCNRegressor(torch.nn.Module):  # HJ
         return x.sigmoid()
 
 
-'''
-class GINRegressor(torch.nn.Module):
-    def __init__(self, n_feat, n_hidden):
-        super().__init__()
-
-        self.conv1 = GINConv(
-            Sequential(Linear(n_feat, n_hidden), BatchNorm1d(n_hidden), ReLU(),
-                       Linear(n_hidden, n_hidden), ReLU()))
-
-        self.conv2 = GINConv(
-            Sequential(Linear(n_hidden, n_hidden), BatchNorm1d(n_hidden), ReLU(),
-                       Linear(n_hidden, n_hidden), ReLU()))
-
-        self.conv3 = GINConv(
-            Sequential(Linear(n_hidden, n_hidden), BatchNorm1d(n_hidden), ReLU(),
-                       Linear(n_hidden, n_hidden), ReLU()))
-
-        self.conv4 = GINConv(
-            Sequential(Linear(n_hidden, n_hidden), BatchNorm1d(n_hidden), ReLU(),
-                       Linear(n_hidden, n_hidden), ReLU()))
-
-        
-        self.conv5 = GINConv(
-            Sequential(Linear(n_hidden, n_hidden), BatchNorm1d(n_hidden), ReLU(),
-                       Linear(n_hidden, n_hidden), ReLU()))
-        
-        self.lin1 = Linear(2*n_hidden, 2*n_hidden)
-        self.lin2 = Linear(2*n_hidden, 1)
-        self.lin = Linear(n_hidden, n_hidden)
-        self.n_hidden = n_hidden
-        
-    def forward(self, data):
-        x, edge_index, y = data.x[:, :self.n_hidden], data.edge_index, data.x[:, self.n_hidden:]
-        x = self.conv1(x, edge_index)
-        x = self.conv2(x, edge_index)
-        x = self.conv3(x, edge_index)
-        x = self.conv4(x, edge_index)
-        x = self.conv5(x, edge_index)
-        
-        y = self.lin(y)
-        
-        # x = global_add_pool(x, None)
-        x = torch.concat([x, y], dim = 1)
-        x = self.lin1(x).relu()
-        x = self.lin2(x)
-        
-        return x.sigmoid()
-'''
-
-
 class GINRegressor(torch.nn.Module):
     def __init__(self, n_feat, n_hidden):
         super().__init__()
@@ -107,9 +57,6 @@ class GINRegressor(torch.nn.Module):
         self.conv5 = GINConv(
             Sequential(Linear(n_hidden, n_hidden), BatchNorm1d(n_hidden), ReLU(),
                        Linear(n_hidden, n_hidden), ReLU()))
-
-        # self.lin1 = Linear(2*n_hidden, 2*n_hidden)
-        # self.lin2 = Linear(2*n_hidden, 1)
 
         self.lin1 = Linear(n_hidden, n_hidden)
         self.lin2 = Linear(n_hidden, 1)
@@ -121,14 +68,6 @@ class GINRegressor(torch.nn.Module):
         x, edge_index, y = data.x[:, :self.n_hidden], data.edge_index, data.x[:, self.n_hidden:]
         x = self.conv1(x, edge_index)
         x = self.conv2(x, edge_index)
-        # x = self.conv3(x, edge_index)
-        # x = self.conv4(x, edge_index)
-        # x = self.conv5(x, edge_index)
-
-        # y = self.lin(y)
-
-        # x = global_add_pool(x, None)
-        # x = torch.concat([x, y], dim = 1)
         x = self.lin1(x).relu()
         x = self.lin2(x)
 
@@ -139,7 +78,6 @@ class GraphConvolution(torch.nn.Module):
     """
     Simple GCN layer, similar to https://arxiv.org/abs/1609.02907
     """
-
     def __init__(self, in_features, out_features, bias=True):
         super(GraphConvolution, self).__init__()
         self.in_features = in_features
@@ -207,9 +145,8 @@ class GCN(torch.nn.Module):
 
 class GAT(torch.nn.Module):
     def __init__(self, args, heads=8):
-        super(GAT, self).ㅡ, ㅡㅜ__init__()
+        super(GAT, self).__init__()
         self.conv1 = GATConv(args.in_channels, args.dim, heads, dropout=0.6)
-        # On the Pubmed dataset, use `heads` output heads in `conv2`.
         self.conv2 = GATConv(args.dim * heads, args.dim, heads=1,
                              concat=False, dropout=0.6)
 
@@ -268,63 +205,10 @@ class GIN(torch.nn.Module):
             return self.lin1(x)
 
         out = self.lin1(x).relu()
-        # out = F.dropout(out, p=0.5, training=self.training)
         if embedding:
             return out
         out = self.lin2(out)
         return out
-
-
-'''
-class GIN(torch.nn.Module):
-    def __init__(self, args):
-        super(GIN, self).__init__()
-        in_channels, dim, out_channels = args.in_channels, args.dim, args.out_channels
-        self.multi_layer = args.multi_layer
-        self.conv1 = GINConv(
-            nn=Sequential(
-                Linear(in_channels, dim),
-                BatchNorm1d(dim),
-                ReLU(),
-                Linear(dim, dim),
-                ReLU())
-        )
-
-        self.conv2 = GINConv(
-            Sequential(Linear(dim, dim), BatchNorm1d(dim), ReLU(),
-                       Linear(dim, dim), ReLU()))
-
-        if self.multi_layer:
-            self.lin1 = Linear(dim*2, dim)
-            self.lin2 = Linear(dim, out_channels)
-        else:
-            self.lin1 = Linear(dim*2, out_channels)
-        
-        self.pool1 = SAGPool(dim)
-        self.pool2 = SAGPool(dim)
-            
-    def forward(self, x, edge_index, batch=None, embedding=False):
-        x = x.float()
-        x = self.conv1(x, edge_index)
-        x, edge_index, _, batch, _ = self.pool1(x, edge_index, None, batch)
-        x1 = torch.cat([global_max_pool(x, batch), global_mean_pool(x, batch)], dim=1)
-        
-        x = self.conv2(x, edge_index)
-        x, edge_index, _, batch, _ = self.pool2(x, edge_index, None, batch)
-        x2 = torch.cat([global_max_pool(x, batch), global_mean_pool(x, batch)], dim=1)
-        
-        x = x1+ x2
-        
-        if not self.multi_layer:
-            return self.lin1(x)
-
-        out = self.lin1(x).relu()
-        out = F.dropout(out, p=0.5, training=self.training)
-        if embedding:
-            return out
-        out = self.lin2(out)
-        return out
-'''
 
 
 class GNNMetric:
