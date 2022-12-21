@@ -241,7 +241,6 @@ if __name__ == "__main__":
                     else:
                         results5[key].append(metrics[key])
 
-
     print("1.encoder:", tester.params.encoder.spec.name,
           "  2.type:", tester.params.encoder.type,
           "  3.kNN constrution:", tester.params.gog.construction.type,
