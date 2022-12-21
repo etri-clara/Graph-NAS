@@ -11,6 +11,9 @@ kernel_map = {"shortest": ShortestPath}
 
 
 def kNNConstruction(data, node, method, k=10):
+    
+
+    
     tot = len(node)
     batch = torch.tensor([0] * tot)
     # node=torch.tensor([[1.0]*32 for i in range(sample)])

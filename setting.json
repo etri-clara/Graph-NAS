@@ -1,11 +1,12 @@
 {
   "encoder": {
-    "type": "regression",
+    "type": "gnn", 
     "spec": {
       "name": "GIN",
-      "in_channels": 5,
+      "in_channels": 6,
       "dim": 32,
-      "out_channels": 1
+      "out_channels": 7,
+      "multi_layer": true
     },
     "training": {
       "lr": 1e-3,
@@ -20,7 +21,8 @@
     "regressor": {
       "spec": {
         "name": "GIN",
-        "hidden_dim": 16
+        "base": "gnn",
+        "hidden_dim": 32
       },
       "training": {
         "lr": 1e-2,
@@ -30,10 +32,10 @@
     }
   },
   "dataset": {
-    "data_path": "./nasbench_dataset.pt",
-    "n_target": 1,
-    "num_data": 10000,
-    "num_train": 80,
+    "data_path": "./data/",
+    "n_target": 7,
+    "num_data": 6466,
+    "num_train": 120,
     "num_val": 20
   }
 }
